@@ -537,13 +537,19 @@ code {
 }
 
 .admin-button {
+  display: inline-block;
   padding: 8px 16px;
   border: 1px solid var(--line);
   background: #ffffff;
   color: var(--ink);
   font: inherit;
   font-family: "Courier New", Courier, monospace;
+  text-decoration: none;
   cursor: pointer;
+}
+
+.admin-button:visited {
+  color: var(--ink);
 }
 
 .admin-button:hover {

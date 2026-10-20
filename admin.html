@@ -373,6 +373,11 @@
                   <p class="admin-post-meta">${formatDate(post.createdAt)} &middot; /post/${escapeHtml(post.slug)}</p>
                 </div>
                 <div class="admin-post-actions">
+                  ${
+                    post.published
+                      ? `<a class="admin-button admin-button-secondary" href="/post/${encodeURIComponent(post.slug)}" target="_blank" rel="noreferrer">View</a>`
+                      : ''
+                  }
                   <button type="button" class="admin-button admin-button-secondary" data-edit-id="${post.id}">Edit</button>
                   <button type="button" class="admin-button admin-button-danger" data-delete-id="${post.id}">Delete</button>
                 </div>
