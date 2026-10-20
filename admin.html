@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Admin | Kevin McCune and the Twine</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  </head>
+  <body>
+    <div class="page-shell inner-page">
+      <header class="hero">
+        <p class="eyebrow">admin</p>
+        <h1>Kevin McCune and the Twine</h1>
+      </header>
+
+      <main class="content-card">
+        <section id="login-gate">
+          <h2 class="section-title">log in</h2>
+          <form id="login-form" class="admin-form">
+            <label class="admin-field">
+              <span>Password</span>
+              <input type="password" id="login-password" autocomplete="current-password" required />
+            </label>
+            <button type="submit" class="admin-button">Log in</button>
+            <p id="login-error" class="admin-error" hidden></p>
+          </form>
+        </section>
+
+        <section id="admin-panel" hidden>
+          <div class="admin-panel-header">
+            <h2 class="section-title" id="form-heading">new post</h2>
+            <button type="button" id="logout-button" class="admin-button admin-button-secondary">Log out</button>
+          </div>
+
+          <form id="post-form" class="admin-form">
+            <input type="hidden" id="post-id" value="" />
+
+            <label class="admin-field">
+              <span>Title</span>
+              <input type="text" id="post-title" required />
+            </label>
+
+            <label class="admin-field">
+              <span>Slug (the post's URL -- /post/your-slug)</span>
+              <input type="text" id="post-slug" />
+            </label>
+
+            <label class="admin-field">
+              <span>Header image (optional -- JPEG, PNG, or WebP, under 6 MB)</span>
+              <input type="file" id="post-image" accept="image/jpeg,image/png,image/webp" />
+            </label>
+            <div id="image-preview-wrap" class="admin-image-preview" hidden>
+              <img id="image-preview" alt="Header image preview" />
+              <label class="admin-toggle">
+                <input type="checkbox" id="post-remove-image" />
+                <span>Remove this image</span>
+              </label>
+            </div>
+
+            <div class="admin-field admin-field-wide">
+              <span>Body (Markdown)</span>
+              <div class="admin-editor-grid">
+                <textarea id="post-body" rows="14" required></textarea>
+                <div class="admin-preview">
+                  <p class="admin-preview-label">preview</p>
+                  <div id="post-preview" class="post-body"></div>
+                </div>
+              </div>
+            </div>
+
+            <label class="admin-toggle">
+              <input type="checkbox" id="post-published" checked />
+              <span>Published (unchecked = draft, hidden from /blog)</span>
+            </label>
+
+            <div class="admin-form-actions">
+              <button type="submit" class="admin-button" id="save-button">Save post</button>
+              <button type="button" class="admin-button admin-button-secondary" id="cancel-edit-button" hidden>
+                Cancel edit
+              </button>
+            </div>
+            <div id="form-errors" class="admin-error" hidden></div>
+            <p id="form-success" class="admin-success" hidden></p>
+          </form>
+
+          <hr />
+
+          <h2 class="section-title">existing posts</h2>
+          <div id="posts-list">
+            <p>Loading posts…</p>
+          </div>
+        </section>
+      </main>
+
+      <p class="back-link"><a href="./index.html">back to links</a></p>
+    </div>
+
+    <script>
+      const loginGate = document.getElementById('login-gate')
+      const adminPanel = document.getElementById('admin-panel')
+      const loginForm = document.getElementById('login-form')
+      const loginPasswordInput = document.getElementById('login-password')
+      const loginError = document.getElementById('login-error')
+      const logoutButton = document.getElementById('logout-button')
+
+      const postForm = document.getElementById('post-form')
+      const postIdInput = document.getElementById('post-id')
+      const postTitleInput = document.getElementById('post-title')
+      const postSlugInput = document.getElementById('post-slug')
+      const postImageInput = document.getElementById('post-image')
+      const imagePreviewWrap = document.getElementById('image-preview-wrap')
+      const imagePreview = document.getElementById('image-preview')
+      const removeImageCheckbox = document.getElementById('post-remove-image')
+      const postBodyInput = document.getElementById('post-body')
+      const postPreview = document.getElementById('post-preview')
+      const postPublishedInput = document.getElementById('post-published')
+      const formHeading = document.getElementById('form-heading')
+      const saveButton = document.getElementById('save-button')
+      const cancelEditButton = document.getElementById('cancel-edit-button')
+      const formErrors = document.getElementById('form-errors')
+      const formSuccess = document.getElementById('form-success')
+      const postsList = document.getElementById('posts-list')
+
+      let pendingImageDataUrl = null
+      let slugManuallyEdited = false
+      let editingPostId = null
+
+      function slugify(input) {
+        return String(input || '')
+          .toLowerCase()
+          .trim()
+          .replace(/['"]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 80)
+      }
+
+      function escapeHtml(value) {
+        const div = document.createElement('div')
+        div.textContent = value || ''
+        return div.innerHTML
+      }
+
+      function formatDate(value) {
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return ''
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      }
+
+      function showPanel() {
+        loginGate.hidden = true
+        adminPanel.hidden = false
+        loadPosts()
+      }
+
+      function showGate() {
+        loginGate.hidden = false
+        adminPanel.hidden = true
+      }
+
+      async function checkSession() {
+        try {
+          const response = await fetch('/api/admin/session')
+          const data = await response.json()
+          if (data.authenticated) {
+            showPanel()
+          } else {
+            showGate()
+          }
+        } catch (error) {
+          showGate()
+        }
+      }
+
+      loginForm.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        loginError.hidden = true
+
+        try {
+          const response = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: loginPasswordInput.value }),
+          })
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}))
+            loginError.textContent = data.error || 'Password does not match.'
+            loginError.hidden = false
+            return
+          }
+
+          loginPasswordInput.value = ''
+          showPanel()
+        } catch (error) {
+          loginError.textContent = 'Something went wrong. Try again.'
+          loginError.hidden = false
+        }
+      })
+
+      logoutButton.addEventListener('click', async () => {
+        await fetch('/api/admin/logout', { method: 'POST' }).catch(() => {})
+        showGate()
+      })
+
+      postTitleInput.addEventListener('input', () => {
+        if (!slugManuallyEdited) {
+          postSlugInput.value = slugify(postTitleInput.value)
+        }
+      })
+
+      postSlugInput.addEventListener('input', () => {
+        slugManuallyEdited = true
+      })
+
+      postImageInput.addEventListener('change', () => {
+        const file = postImageInput.files && postImageInput.files[0]
+        if (!file) return
+
+        const reader = new FileReader()
+        reader.onload = () => {
+          pendingImageDataUrl = reader.result
+          imagePreview.src = pendingImageDataUrl
+          imagePreviewWrap.hidden = false
+          removeImageCheckbox.checked = false
+        }
+        reader.readAsDataURL(file)
+      })
+
+      function updatePreview() {
+        const markdown = postBodyInput.value
+        postPreview.innerHTML = window.marked ? window.marked.parse(markdown || '') : escapeHtml(markdown)
+      }
+
+      postBodyInput.addEventListener('input', updatePreview)
+
+      function resetForm() {
+        editingPostId = null
+        postIdInput.value = ''
+        postTitleInput.value = ''
+        postSlugInput.value = ''
+        postBodyInput.value = ''
+        postPublishedInput.checked = true
+        pendingImageDataUrl = null
+        slugManuallyEdited = false
+        imagePreviewWrap.hidden = true
+        imagePreview.src = ''
+        removeImageCheckbox.checked = false
+        postImageInput.value = ''
+        formHeading.textContent = 'new post'
+        saveButton.textContent = 'Save post'
+        cancelEditButton.hidden = true
+        formErrors.hidden = true
+        updatePreview()
+      }
+
+      cancelEditButton.addEventListener('click', resetForm)
+
+      function beginEdit(post) {
+        editingPostId = post.id
+        postIdInput.value = post.id
+        postTitleInput.value = post.title
+        postSlugInput.value = post.slug
+        postBodyInput.value = post.bodyMarkdown
+        postPublishedInput.checked = post.published
+        pendingImageDataUrl = null
+        slugManuallyEdited = true
+        removeImageCheckbox.checked = false
+        postImageInput.value = ''
+
+        if (post.headerImage) {
+          imagePreview.src = post.headerImage
+          imagePreviewWrap.hidden = false
+        } else {
+          imagePreviewWrap.hidden = true
+          imagePreview.src = ''
+        }
+
+        formHeading.textContent = `editing "${post.title}"`
+        saveButton.textContent = 'Save changes'
+        cancelEditButton.hidden = false
+        formErrors.hidden = true
+        formSuccess.hidden = true
+        updatePreview()
+        postForm.scrollIntoView({ behavior: 'smooth' })
+      }
+
+      postForm.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        formErrors.hidden = true
+        formSuccess.hidden = true
+
+        const payload = {
+          title: postTitleInput.value.trim(),
+          slug: postSlugInput.value.trim(),
+          bodyMarkdown: postBodyInput.value,
+          published: postPublishedInput.checked,
+        }
+
+        if (pendingImageDataUrl) {
+          payload.headerImageDataUrl = pendingImageDataUrl
+        } else if (removeImageCheckbox.checked) {
+          payload.removeHeaderImage = true
+        }
+
+        const isEditing = Boolean(editingPostId)
+        const url = isEditing ? `/api/admin/posts/${encodeURIComponent(editingPostId)}` : '/api/admin/posts'
+        const method = isEditing ? 'PUT' : 'POST'
+
+        try {
+          const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          const data = await response.json().catch(() => ({}))
+
+          if (response.status === 401) {
+            showGate()
+            return
+          }
+
+          if (!response.ok) {
+            formErrors.textContent = (data.errors || [data.error] || ['The post could not be saved.']).filter(Boolean).join(' ')
+            formErrors.hidden = false
+            return
+          }
+
+          formSuccess.textContent = isEditing ? 'Post updated.' : 'Post published.'
+          formSuccess.hidden = false
+          resetForm()
+          loadPosts()
+        } catch (error) {
+          formErrors.textContent = 'The post could not be saved. Try again.'
+          formErrors.hidden = false
+        }
+      })
+
+      let cachedPosts = []
+
+      async function loadPosts() {
+        try {
+          const response = await fetch('/api/admin/posts')
+
+          if (response.status === 401) {
+            showGate()
+            return
+          }
+
+          const data = await response.json()
+          cachedPosts = data.posts || []
+          renderPosts()
+        } catch (error) {
+          postsList.innerHTML = '<p>Posts could not be loaded right now.</p>'
+        }
+      }
+
+      function renderPosts() {
+        if (!cachedPosts.length) {
+          postsList.innerHTML = '<p>No posts yet.</p>'
+          return
+        }
+
+        postsList.innerHTML = cachedPosts
+          .map((post) => {
+            const statusLabel = post.published ? 'published' : 'draft'
+            return `
+              <article class="admin-post-row">
+                <div>
+                  <p class="admin-post-title">${escapeHtml(post.title)} <span class="admin-post-status">(${statusLabel})</span></p>
+                  <p class="admin-post-meta">${formatDate(post.createdAt)} &middot; /post/${escapeHtml(post.slug)}</p>
+                </div>
+                <div class="admin-post-actions">
+                  <button type="button" class="admin-button admin-button-secondary" data-edit-id="${post.id}">Edit</button>
+                  <button type="button" class="admin-button admin-button-danger" data-delete-id="${post.id}">Delete</button>
+                </div>
+              </article>
+            `
+          })
+          .join('')
+
+        postsList.querySelectorAll('[data-edit-id]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const post = cachedPosts.find((item) => item.id === button.dataset.editId)
+            if (post) beginEdit(post)
+          })
+        })
+
+        postsList.querySelectorAll('[data-delete-id]').forEach((button) => {
+          button.addEventListener('click', async () => {
+            const post = cachedPosts.find((item) => item.id === button.dataset.deleteId)
+            if (!post) return
+            if (!window.confirm(`Delete "${post.title}"? This can't be undone.`)) return
+
+            try {
+              const response = await fetch(`/api/admin/posts/${encodeURIComponent(post.id)}`, {
+                method: 'DELETE',
+              })
+
+              if (response.status === 401) {
+                showGate()
+                return
+              }
+
+              loadPosts()
+            } catch (error) {
+              window.alert('That post could not be deleted. Try again.')
+            }
+          })
+        })
+      }
+
+      updatePreview()
+      checkSession()
+    </script>
+  </body>
+</html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blog | Kevin McCune and the Twine</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell inner-page">
+      <header class="hero">
+        <p class="eyebrow">blog</p>
+        <h1>Kevin McCune and the Twine</h1>
+      </header>
+
+      <main class="content-card">
+        <div id="post-list" class="post-list">
+          <p>Loading posts…</p>
+        </div>
+      </main>
+
+      <p class="back-link"><a href="./index.html">back to links</a></p>
+    </div>
+
+    <script>
+      function escapeHtml(value) {
+        const div = document.createElement('div')
+        div.textContent = value || ''
+        return div.innerHTML
+      }
+
+      function formatDate(value) {
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return ''
+        return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      }
+
+      async function loadPosts() {
+        const container = document.getElementById('post-list')
+
+        try {
+          const response = await fetch('/api/posts')
+          const data = await response.json()
+          const posts = data.posts || []
+
+          if (!posts.length) {
+            container.innerHTML = '<p>No posts yet. Check back soon.</p>'
+            return
+          }
+
+          container.innerHTML = posts
+            .map((post) => {
+              const href = `/post/${encodeURIComponent(post.slug)}`
+              const image = post.headerImage
+                ? `<a href="${href}"><img src="${post.headerImage}" alt="" class="post-card-image" /></a>`
+                : ''
+
+              return `
+                <article class="post-card">
+                  ${image}
+                  <p class="post-card-date">${formatDate(post.createdAt)}</p>
+                  <h2 class="post-card-title"><a href="${href}">${escapeHtml(post.title)}</a></h2>
+                  <p class="post-card-excerpt">${escapeHtml(post.excerpt)}</p>
+                  <p><a href="${href}">read more &rarr;</a></p>
+                </article>
+              `
+            })
+            .join('<hr />')
+        } catch (error) {
+          container.innerHTML = '<p>Posts could not be loaded right now.</p>'
+        }
+      }
+
+      loadPosts()
+    </script>
+  </body>
+</html>

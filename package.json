@@ -1,0 +1,14 @@
+{
+  "name": "kevin-mccune-and-the-twine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static band site with a small Node backend for blog posts.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}
