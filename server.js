@@ -478,6 +478,17 @@ const PAGE_ROUTES = {
   '/admin': 'admin.html',
 }
 
+// URL.pathname keeps percent-encoding as-is (e.g. a literal "%20") rather
+// than decoding it -- needed here since several asset folders have real
+// spaces in their names on disk.
+function decodeUrlPath(pathname) {
+  try {
+    return decodeURIComponent(pathname)
+  } catch {
+    return pathname
+  }
+}
+
 function normalizePath(pathname) {
   if (!pathname || pathname === '/') {
     return '/'
@@ -672,7 +683,7 @@ const server = http.createServer(async (request, response) => {
 
     // ---- Uploaded images ----
     if ((method === 'GET' || method === 'HEAD') && pathname.startsWith('/uploads/')) {
-      const targetPath = path.join(UPLOADS_DIR, pathname.replace('/uploads/', ''))
+      const targetPath = path.join(UPLOADS_DIR, decodeUrlPath(pathname.replace('/uploads/', '')))
       const resolvedTarget = path.resolve(targetPath)
 
       if (!resolvedTarget.startsWith(path.resolve(UPLOADS_DIR))) {
@@ -698,7 +709,7 @@ const server = http.createServer(async (request, response) => {
 
       // Any other real file in the project root (styles.css, assets/*,
       // favicons, robots.txt, etc.), guarded against path traversal.
-      const candidatePath = path.resolve(path.join(__dirname, pathname))
+      const candidatePath = path.resolve(path.join(__dirname, decodeUrlPath(pathname)))
 
       if (
         candidatePath.startsWith(__dirname) &&
